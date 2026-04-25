@@ -24,6 +24,29 @@ jobs:
       tag_date: ${{ steps.date.outputs.tag }}
       registry_list: ${{ steps.registry.outputs.list }}
     steps:
+      - name: Validate Registry Configuration
+        shell: bash
+        run: |
+          echo "Configuration check:"
+          echo "  GHCR_ENABLED = ${{ vars.GHCR_ENABLED }}"
+          echo "  GITHUB_REPOSITORY_OWNER = ${{ github.repository_owner }}"
+          echo "  GITHUB_TOKEN exists = ${{ secrets.GITHUB_TOKEN != '' }}"
+          echo "  running in act = ${{ github.event.act }}"
+
+          if [[ "${{ vars.GHCR_ENABLED }}" != "true" ]]; then
+            echo "::warning::GHCR_ENABLED repository variable is not set to 'true'."
+            echo "  Please set repository variable GHCR_ENABLED='true' to enable GHCR builds."
+          fi
+          if [[ -z "${{ secrets.GITHUB_TOKEN }}" ]]; then
+            echo "::warning::GITHUB_TOKEN secret is not available."
+          fi
+          if [[ "${{ vars.GHCR_ENABLED }}" != "true" && "${{ github.event.act }}" != "true" ]]; then
+            echo "::error::No registry configuration available for production build."
+            echo "  Either set GHCR_ENABLED='true' with valid GITHUB_TOKEN,"
+            echo "  or run workflow in act mode for local testing."
+            exit 1
+          fi
+
       - name: Determine Container Date Tag
         id: date
         shell: bash
@@ -126,19 +149,44 @@ jobs:
           ARCH_TYPE: ${{ steps.arch.outputs.type }}
           TAG_DATE: ${{ needs.tbuild_vars.outputs.tag_date }}
           IMAGE_TAG: ${{ matrix.image_tag }}
+          HAVE_GHCR_LOGIN: ${{ needs.tbuild_vars.outputs.have_ghcr_login }}
+          ACT: ${{ github.event.act }}
         run: |
+          echo "Generating container tags with:"
+          echo "  REGISTRIES = '${REGISTRIES}'"
+          echo "  ARCH_TYPE = '${ARCH_TYPE}'"
+          echo "  TAG_DATE = '${TAG_DATE}'"
+          echo "  IMAGE_TAG = '${IMAGE_TAG}'"
+          echo "  HAVE_GHCR_LOGIN = '${HAVE_GHCR_LOGIN}'"
+          echo "  ACT = '${ACT}'"
+
           tags=""
           for registry in ${REGISTRIES}; do
-            echo "Generating tags for ${registry}:"
-            tags="${tags:+${tags},}${registry}/blackdex/musl-toolchain:${ARCH_TYPE}${IMAGE_TAG}"
-            tags="${tags:+${tags},}${registry}/blackdex/musl-toolchain:${ARCH_TYPE}${IMAGE_TAG}${TAG_DATE}"
+            echo "  Processing registry: ${registry}"
+            tag1="${registry}/blackdex/musl-toolchain:${ARCH_TYPE}${IMAGE_TAG}"
+            tag2="${registry}/blackdex/musl-toolchain:${ARCH_TYPE}${IMAGE_TAG}${TAG_DATE}"
+            echo "    - ${tag1}"
+            echo "    - ${tag2}"
+            tags="${tags:+${tags},}${tag1}"
+            tags="${tags:+${tags},}${tag2}"
           done
 
           if [[ "${tags}" = "" ]]; then
             echo "::error::Unable to generate tags. Check if registries are available!"
+            echo ""
+            echo "Diagnostic:"
+            echo "  - REGISTRIES is empty"
+            echo "  - HAVE_GHCR_LOGIN = '${HAVE_GHCR_LOGIN}'"
+            echo "  - ACT = '${ACT}'"
+            echo ""
+            echo "To fix:"
+            echo "  1. Set repository variable GHCR_ENABLED='true'"
+            echo "  2. Ensure GITHUB_TOKEN secret exists (automatic for GitHub Actions)"
+            echo "  3. Or run workflow using 'act' to use localhost:5000"
             exit 1
           fi
 
+          echo "Generated tags: ${tags}"
           echo "tags=${tags}" | tee -a "${GITHUB_OUTPUT}"
 
       - name: Checkout Repo
