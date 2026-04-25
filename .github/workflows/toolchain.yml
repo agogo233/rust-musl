@@ -24,28 +24,28 @@ jobs:
       tag_date: ${{ steps.date.outputs.tag }}
       registry_list: ${{ steps.registry.outputs.list }}
     steps:
-    - name: Determine Container Date Tag
-      id: date
-      shell: bash
-      run: |
-        # Get the current date
-        echo "tag=$(date +'-%Y-%m-%d')" | tee -a "${GITHUB_OUTPUT}"
+      - name: Determine Container Date Tag
+        id: date
+        shell: bash
+        run: |
+          # Get the current date
+          echo "tag=$(date +'-%Y-%m-%d')" | tee -a "${GITHUB_OUTPUT}"
 
-    - name: Determine Container Registries
-      id: registry
-      env:
-        HAVE_GHCR_LOGIN: ${{ env.HAVE_GHCR_LOGIN }}
-        HAVE_LOCALHOST: ${{ github.event.act }}
-      shell: bash
-      run: |
-        registries=""
-        if [[ "${HAVE_GHCR_LOGIN}" = true ]]; then
-          registries="${registries:+${registries} }ghcr.io"
-        fi
-        if [[ "${HAVE_LOCALHOST}" = true ]]; then
-          registries="${registries:+${registries} }localhost:5000"
-        fi
-        echo "list=${registries}" | tee -a "${GITHUB_OUTPUT}"
+      - name: Determine Container Registries
+        id: registry
+        env:
+          HAVE_GHCR_LOGIN: ${{ env.HAVE_GHCR_LOGIN }}
+          HAVE_LOCALHOST: ${{ github.event.act }}
+        shell: bash
+        run: |
+          registries=""
+          if [[ "${HAVE_GHCR_LOGIN}" = true ]]; then
+            registries="${registries:+${registries} }ghcr.io"
+          fi
+          if [[ "${HAVE_LOCALHOST}" = true ]]; then
+            registries="${registries:+${registries} }localhost:5000"
+          fi
+          echo "list=${registries}" | tee -a "${GITHUB_OUTPUT}"
 
   # ###
   # Building Toolchain
@@ -53,7 +53,7 @@ jobs:
 
     name: Build Toolchain - ${{ matrix.image_tag }} - ${{ matrix.os }}
     needs:
-    - tbuild_vars
+      - tbuild_vars
     runs-on: ${{ matrix.os }}
     permissions:
       packages: write
@@ -62,10 +62,10 @@ jobs:
       max-parallel: ${{ github.event.act && 1 || 8 }}
       matrix:
         include:
-        - act: ${{ github.event.act }}
-          os: ubuntu-24.04
-          image_tag: x86_64-musl
-          target: x86_64-unknown-linux-musl
+          - act: ${{ github.event.act }}
+            os: ubuntu-24.04
+            image_tag: x86_64-musl
+            target: x86_64-unknown-linux-musl
       steps:
       - name: "[act] Debug Matrix"
         if: ${{ github.event.act }}
@@ -168,78 +168,78 @@ jobs:
     permissions:
       packages: write
     needs:
-    - tbuild_vars
-    - toolchain
+      - tbuild_vars
+      - toolchain
     strategy:
       max-parallel: ${{ github.event.act && 1 || 8 }}
       matrix:
         image_tag:
-        - x86_64-musl
+          - x86_64-musl
     steps:
-    - name: "[act] Debug Matrix"
-      if: ${{ github.event.act }}
-      shell: bash
-      env:
-        BUILD_JSON: ${{ toJson(needs.tbuild_vars) }}
-        NEEDS_JSON: ${{ toJson(needs.toolchain) }}
-        EVENT_NAME: ${{ github.event_name }}
-        MATRIX_JSON: ${{ toJson(matrix) }}
+      - name: "[act] Debug Matrix"
+        if: ${{ github.event.act }}
+        shell: bash
+        env:
+          BUILD_JSON: ${{ toJson(needs.tbuild_vars) }}
+          NEEDS_JSON: ${{ toJson(needs.toolchain) }}
+          EVENT_NAME: ${{ github.event_name }}
+          MATRIX_JSON: ${{ toJson(matrix) }}
           # GITHUB_JSON: ${{ toJson(github) }}
-      run: |
-        echo "event_name = ${EVENT_NAME}"
-        echo "build_json = ${BUILD_JSON}"
-        echo "needs_json = ${NEEDS_JSON}"
-        echo ; echo "matrix = ${MATRIX_JSON}"
-        # echo ; echo "github = ${GITHUB_JSON}"
+        run: |
+          echo "event_name = ${EVENT_NAME}"
+          echo "build_json = ${BUILD_JSON}"
+          echo "needs_json = ${NEEDS_JSON}"
+          echo ; echo "matrix = ${MATRIX_JSON}"
+          # echo ; echo "github = ${GITHUB_JSON}"
 
-    - name: Setup Docker Buildx (setup-buildx-action)
-      uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435   # v3.11.1
-      with:
-        driver: docker-container
-        cache-binary: false
-        driver-opts: |
-          network=host
+      - name: Setup Docker Buildx (setup-buildx-action)
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+        with:
+          driver: docker-container
+          cache-binary: false
+          driver-opts: |
+            network=host
 
-    - name: "[act] Start local registry"
-      if: ${{ github.event.act }}
-      shell: bash
-      run: |
-        # Start a local docker registry
-        docker run -d --name act-registry --network host registry:3 || \
-        docker start act-registry || true
+      - name: "[act] Start local registry"
+        if: ${{ github.event.act }}
+        shell: bash
+        run: |
+          # Start a local docker registry
+          docker run -d --name act-registry --network host registry:3 || \
+          docker start act-registry || true
 
-    - name: Login to ghcr.io
-      if: ${{ needs.tbuild_vars.outputs.have_ghcr_login == 'true' }}
-      uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef   # v3.6.0
-      with:
-        registry: ghcr.io
-        username: ${{ github.repository_owner }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Login to ghcr.io
+        if: ${{ needs.tbuild_vars.outputs.have_ghcr_login == 'true' }}
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Create combined manifests for amd64/arm64
-      shell: bash
-      env:
-        REGISTRIES: ${{ needs.tbuild_vars.outputs.registry_list }}
-        TAG_DATE: ${{ needs.tbuild_vars.outputs.tag_date }}
-        IMAGE_TAG: ${{ matrix.image_tag }}
-      run: |
-        tags=""
-        for registry in ${REGISTRIES}; do
-          echo "Generating manifest for ${registry}:"
-          docker buildx imagetools create \
-            -t ${registry}/blackdex/musl-toolchain:${IMAGE_TAG} \
-            -t ${registry}/blackdex/musl-toolchain:${IMAGE_TAG}${TAG_DATE} \
-            ${registry}/blackdex/musl-toolchain:amd64-${IMAGE_TAG}${TAG_DATE}
-        done
+      - name: Create combined manifests for amd64/arm64
+        shell: bash
+        env:
+          REGISTRIES: ${{ needs.tbuild_vars.outputs.registry_list }}
+          TAG_DATE: ${{ needs.tbuild_vars.outputs.tag_date }}
+          IMAGE_TAG: ${{ matrix.image_tag }}
+        run: |
+          tags=""
+          for registry in ${REGISTRIES}; do
+            echo "Generating manifest for ${registry}:"
+            docker buildx imagetools create \
+              -t ${registry}/blackdex/musl-toolchain:${IMAGE_TAG} \
+              -t ${registry}/blackdex/musl-toolchain:${IMAGE_TAG}${TAG_DATE} \
+              ${registry}/blackdex/musl-toolchain:amd64-${IMAGE_TAG}${TAG_DATE}
+          done
 
-    - name: Inspect manifests for amd64/arm64
-      shell: bash
-      env:
-        REGISTRIES: ${{ needs.tbuild_vars.outputs.registry_list }}
-        IMAGE_TAG: ${{ matrix.image_tag }}
-      run: |
-        tags=""
-        for registry in ${REGISTRIES}; do
-          echo "Inspecting manifest for ${registry}:"
-          docker buildx imagetools inspect ${registry}/blackdex/musl-toolchain:${IMAGE_TAG}
-        done
+      - name: Inspect manifests for amd64/arm64
+        shell: bash
+        env:
+          REGISTRIES: ${{ needs.tbuild_vars.outputs.registry_list }}
+          IMAGE_TAG: ${{ matrix.image_tag }}
+        run: |
+          tags=""
+          for registry in ${REGISTRIES}; do
+            echo "Inspecting manifest for ${registry}:"
+            docker buildx imagetools inspect ${registry}/blackdex/musl-toolchain:${IMAGE_TAG}
+          done
