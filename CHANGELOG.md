@@ -12,6 +12,10 @@ These may occasionally be rebuilt, but only while they're "current", or possibly
 
 
 ## 2026-06-26
+  - Update SQLite to v3.53.3
+
+
+## 2026-06-26
   - Adjusted the `toolchain.cmake` file to work with this image.
     If crates used cmake to build code, it could happen that it did not found the pre-compiled libraries.
     By creating a custom file which basically does the same as all `TARGET_` environment variables this works again.

@@ -255,7 +255,7 @@ jobs:
           fi
 
       - name: Cache previous rustc stable hash
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: ${{ !github.event.act }}
         with:
           path: ~/rustc-stable.hash
@@ -384,7 +384,7 @@ jobs:
       - &buildx-act
         name: Setup Docker Buildx (act)
         if: ${{ needs.mbuild_vars.outputs.have_buildkit_ssh == 'true' }}
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
         with:
           use: true
           name: act-multiarch-${{ steps.arch.outputs.type }}
@@ -412,7 +412,7 @@ jobs:
       - &buildx
         name: Setup Docker Buildx
         if: ${{ needs.mbuild_vars.outputs.have_buildkit_ssh == 'false' }}
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
         with:
           driver: docker-container
           cache-binary: false
@@ -427,7 +427,7 @@ jobs:
       - &ghcr-login
         name: Login to ghcr.io
         if: ${{ needs.mbuild_vars.outputs.have_ghcr_login == 'true' }}
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -440,7 +440,7 @@ jobs:
           persist-credentials: false
 
       - name: Docker Build - Ubuntu Base
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           platforms: ${{ endsWith(matrix.os, '-arm') && 'linux/arm64' || 'linux/amd64'}}
           outputs: type=image,oci-mediatypes=true
@@ -512,7 +512,7 @@ jobs:
       - &dockerhub-login
         name: Login to DockerHub
         if: ${{ needs.mbuild_vars.outputs.have_dockerhub_login == 'true' }}
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -520,7 +520,7 @@ jobs:
       - &quay-login
         name: Login to quay.io
         if: ${{ needs.mbuild_vars.outputs.have_quay_login == 'true' }}
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_USERNAME }}
@@ -585,7 +585,7 @@ jobs:
       - name: Docker Build - Rust Current Stable
         # Skip during nightly builds
         if: ${{ needs.mbuild_vars.outputs.stable_trigger || !needs.mbuild_vars.outputs.nightly_trigger }}
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           platforms: ${{ endsWith(matrix.os, '-arm') && 'linux/arm64' || 'linux/amd64'}}
           outputs: type=image,oci-mediatypes=true
@@ -653,7 +653,7 @@ jobs:
         id: push_stable
         # Skip during nightly builds
         if: ${{ needs.mbuild_vars.outputs.stable_trigger || !needs.mbuild_vars.outputs.nightly_trigger }}
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           platforms: ${{ endsWith(matrix.os, '-arm') && 'linux/arm64' || 'linux/amd64'}}
           outputs: type=image,oci-mediatypes=true,compression=zstd,compression-level=3
@@ -693,7 +693,7 @@ jobs:
 
       - name: Attest - Stable - ghcr.io
         if: ${{ !github.event.act && steps.push_stable.outputs.digest != '' && needs.mbuild_vars.outputs.have_ghcr_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: ghcr.io/blackdex/rust-musl
           subject-digest: ${{ steps.push_stable.outputs.digest }}
@@ -701,7 +701,7 @@ jobs:
 
       - name: Attest - Stable - docker.io
         if: ${{ !github.event.act && steps.push_stable.outputs.digest != '' && needs.mbuild_vars.outputs.have_dockerhub_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: docker.io/blackdex/rust-musl
           subject-digest: ${{ steps.push_stable.outputs.digest }}
@@ -709,7 +709,7 @@ jobs:
 
       - name: Attest - Stable - quay.io
         if: ${{ !github.event.act && steps.push_stable.outputs.digest != '' && needs.mbuild_vars.outputs.have_quay_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: quay.io/blackdex/rust-musl
           subject-digest: ${{ steps.push_stable.outputs.digest }}
@@ -720,7 +720,7 @@ jobs:
       - name: Docker Build - Rust Vaultwarden Stable
         # Skip during nightly builds
         if: ${{ needs.mbuild_vars.outputs.stable_version != needs.mbuild_vars.outputs.vaultwarden_version && (needs.mbuild_vars.outputs.stable_trigger || !needs.mbuild_vars.outputs.nightly_trigger) }}
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           platforms: ${{ endsWith(matrix.os, '-arm') && 'linux/arm64' || 'linux/amd64'}}
           outputs: type=image,oci-mediatypes=true
@@ -787,7 +787,7 @@ jobs:
         id: push_vw_stable
         # Skip during nightly builds
         if: ${{ needs.mbuild_vars.outputs.stable_version != needs.mbuild_vars.outputs.vaultwarden_version && (needs.mbuild_vars.outputs.stable_trigger || !needs.mbuild_vars.outputs.nightly_trigger) }}
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           platforms: ${{ endsWith(matrix.os, '-arm') && 'linux/arm64' || 'linux/amd64'}}
           outputs: type=image,oci-mediatypes=true,compression=zstd,compression-level=3
@@ -826,7 +826,7 @@ jobs:
 
       - name: Attest - VW Stable - ghcr.io
         if: ${{ !github.event.act && steps.push_vw_stable.outputs.digest != '' && needs.mbuild_vars.outputs.have_ghcr_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: ghcr.io/blackdex/rust-musl
           subject-digest: ${{ steps.push_vw_stable.outputs.digest }}
@@ -834,7 +834,7 @@ jobs:
 
       - name: Attest - VW Stable - docker.io
         if: ${{ !github.event.act && steps.push_vw_stable.outputs.digest != '' && needs.mbuild_vars.outputs.have_dockerhub_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: docker.io/blackdex/rust-musl
           subject-digest: ${{ steps.push_vw_stable.outputs.digest }}
@@ -842,7 +842,7 @@ jobs:
 
       - name: Attest - VW Stable - quay.io
         if: ${{ !github.event.act && steps.push_vw_stable.outputs.digest != '' && needs.mbuild_vars.outputs.have_quay_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: quay.io/blackdex/rust-musl
           subject-digest: ${{ steps.push_vw_stable.outputs.digest }}
@@ -851,7 +851,7 @@ jobs:
       # ###
       # Rust Nightly
       - name: Docker Build - Rust Nightly
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           platforms: ${{ endsWith(matrix.os, '-arm') && 'linux/arm64' || 'linux/amd64'}}
           outputs: type=image,oci-mediatypes=true
@@ -912,7 +912,7 @@ jobs:
 
       - name: Docker Push - Rust Nightly
         id: push_nightly
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           platforms: ${{ endsWith(matrix.os, '-arm') && 'linux/arm64' || 'linux/amd64'}}
           outputs: type=image,oci-mediatypes=true,compression=zstd,compression-level=3
@@ -951,7 +951,7 @@ jobs:
 
       - name: Attest - Nightly - ghcr.io
         if: ${{ !github.event.act && steps.push_nightly.outputs.digest != '' && needs.mbuild_vars.outputs.have_ghcr_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: ghcr.io/blackdex/rust-musl
           subject-digest: ${{ steps.push_nightly.outputs.digest }}
@@ -959,7 +959,7 @@ jobs:
 
       - name: Attest - Nightly - docker.io
         if: ${{ !github.event.act && steps.push_nightly.outputs.digest != '' && needs.mbuild_vars.outputs.have_dockerhub_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: docker.io/blackdex/rust-musl
           subject-digest: ${{ steps.push_nightly.outputs.digest }}
@@ -967,7 +967,7 @@ jobs:
 
       - name: Attest - Nightly - quay.io
         if: ${{ !github.event.act && steps.push_nightly.outputs.digest != '' && needs.mbuild_vars.outputs.have_quay_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: quay.io/blackdex/rust-musl
           subject-digest: ${{ steps.push_nightly.outputs.digest }}
@@ -1083,7 +1083,7 @@ jobs:
 
       - name: Attest - Combined Stable - ghcr.io
         if: ${{ !github.event.act && steps.comb_stable.outputs.digest != '' && needs.mbuild_vars.outputs.have_ghcr_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: ghcr.io/blackdex/rust-musl
           subject-digest: ${{ steps.comb_stable.outputs.digest }}
@@ -1091,7 +1091,7 @@ jobs:
 
       - name: Attest - Combined Stable - docker.io
         if: ${{ !github.event.act && steps.comb_stable.outputs.digest != '' && needs.mbuild_vars.outputs.have_dockerhub_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: docker.io/blackdex/rust-musl
           subject-digest: ${{ steps.comb_stable.outputs.digest }}
@@ -1099,7 +1099,7 @@ jobs:
 
       - name: Attest - Combined Stable - quay.io
         if: ${{ !github.event.act && steps.comb_stable.outputs.digest != '' && needs.mbuild_vars.outputs.have_quay_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: quay.io/blackdex/rust-musl
           subject-digest: ${{ steps.comb_stable.outputs.digest }}
@@ -1153,7 +1153,7 @@ jobs:
 
       - name: Attest - Combined VW Stable - ghcr.io
         if: ${{ !github.event.act && steps.comb_vw.outputs.digest != '' && needs.mbuild_vars.outputs.have_ghcr_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: ghcr.io/blackdex/rust-musl
           subject-digest: ${{ steps.comb_vw.outputs.digest }}
@@ -1161,7 +1161,7 @@ jobs:
 
       - name: Attest - Combined VW Stable - docker.io
         if: ${{ !github.event.act && steps.comb_vw.outputs.digest != '' && needs.mbuild_vars.outputs.have_dockerhub_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: docker.io/blackdex/rust-musl
           subject-digest: ${{ steps.comb_vw.outputs.digest }}
@@ -1169,7 +1169,7 @@ jobs:
 
       - name: Attest - Combined VW Stable - quay.io
         if: ${{ !github.event.act && steps.comb_vw.outputs.digest != '' && needs.mbuild_vars.outputs.have_quay_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: quay.io/blackdex/rust-musl
           subject-digest: ${{ steps.comb_vw.outputs.digest }}
@@ -1221,7 +1221,7 @@ jobs:
 
       - name: Attest - Combined Nightly - ghcr.io
         if: ${{ !github.event.act && steps.comb_nightly.outputs.digest != '' && needs.mbuild_vars.outputs.have_ghcr_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: ghcr.io/blackdex/rust-musl
           subject-digest: ${{ steps.comb_nightly.outputs.digest }}
@@ -1229,7 +1229,7 @@ jobs:
 
       - name: Attest - Combined Nightly - docker.io
         if: ${{ !github.event.act && steps.comb_nightly.outputs.digest != '' && needs.mbuild_vars.outputs.have_dockerhub_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: docker.io/blackdex/rust-musl
           subject-digest: ${{ steps.comb_nightly.outputs.digest }}
@@ -1237,7 +1237,7 @@ jobs:
 
       - name: Attest - Combined Nightly - quay.io
         if: ${{ !github.event.act && steps.comb_nightly.outputs.digest != '' && needs.mbuild_vars.outputs.have_quay_login == 'true' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: quay.io/blackdex/rust-musl
           subject-digest: ${{ steps.comb_nightly.outputs.digest }}
