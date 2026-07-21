@@ -11,6 +11,12 @@ These may occasionally be rebuilt, but only while they're "current", or possibly
 ---
 
 
+## 2026-07-21
+  - Remove `config.toml` and use `CARGO_TARGET_` environment variables instead
+  - Also add the `NM_<triple>` to point to the correct nm binary
+  - Updated GHA
+
+
 ## 2026-06-26
   - Update SQLite to v3.53.3
 

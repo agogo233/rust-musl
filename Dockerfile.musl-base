@@ -4,6 +4,8 @@
 ARG IMAGE_TAG=x86_64-musl
 # Which registry to use for the musl-toolchain
 ARG TOOLCHAIN_REGISTRY=ghcr.io
+# Default RUSTFLAGS to be used per triple env
+ARG CARGO_TARGET_RUSTFLAGS="-Ctarget-feature=+crt-static -Clink-self-contained=yes -Cprefer-dynamic=no"
 
 # First build the base image with all packages needed to build any target
 # https://hub.docker.com/_/ubuntu
@@ -58,45 +60,61 @@ EOF
 # This keeps all the needed variables which are static within the Dockerfile instead of always providing them via build-arg.
 #
 # Define the openssl architecture and extra compile flags to use during build per IMAGE_TAG
+ARG CARGO_TARGET_RUSTFLAGS
 FROM base AS target_x86_64-musl
-ENV TARGET="x86_64-unknown-linux-musl" \
-    OPENSSL_ARCH="linux-x86_64 enable-ec_nistp_64_gcc_128" \
+ENV TARGET="x86_64-unknown-linux-musl"
+ENV OPENSSL_ARCH="linux-x86_64 enable-ec_nistp_64_gcc_128" \
     ARCH_CFLAGS="-fcf-protection=full" \
     # Target specific env variables
-    AR_x86_64_unknown_linux_musl="x86_64-unknown-linux-musl-gcc-ar" \
-    CC_x86_64_unknown_linux_musl="x86_64-unknown-linux-musl-gcc" \
-    CXX_x86_64_unknown_linux_musl="x86_64-unknown-linux-musl-g++" \
-    RANLIB_x86_64_unknown_linux_musl="x86_64-unknown-linux-musl-gcc-ranlib"
+    AR_x86_64_unknown_linux_musl="${TARGET}-gcc-ar" \
+    CC_x86_64_unknown_linux_musl="${TARGET}-gcc" \
+    CXX_x86_64_unknown_linux_musl="${TARGET}-g++" \
+    NM_x86_64_unknown_linux_musl="${TARGET}-gcc-nm" \
+    RANLIB_x86_64_unknown_linux_musl="${TARGET}-gcc-ranlib" \
+    CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER="${TARGET}-gcc" \
+    CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS="${CARGO_TARGET_RUSTFLAGS}"
 
+ARG CARGO_TARGET_RUSTFLAGS
 FROM base AS target_aarch64-musl
-ENV TARGET="aarch64-unknown-linux-musl" \
-    OPENSSL_ARCH="linux-aarch64" \
+ENV TARGET="aarch64-unknown-linux-musl"
+ENV OPENSSL_ARCH="linux-aarch64" \
     ARCH_CFLAGS="-mno-outline-atomics -mbranch-protection=standard" \
     # Target specific env variables
-    AR_aarch64_unknown_linux_musl="aarch64-unknown-linux-musl-gcc-ar" \
-    CC_aarch64_unknown_linux_musl="aarch64-unknown-linux-musl-gcc" \
-    CXX_aarch64_unknown_linux_musl="aarch64-unknown-linux-musl-g++" \
-    RANLIB_aarch64_unknown_linux_musl="aarch64-unknown-linux-musl-gcc-ranlib"
+    AR_aarch64_unknown_linux_musl="${TARGET}-gcc-ar" \
+    CC_aarch64_unknown_linux_musl="${TARGET}-gcc" \
+    CXX_aarch64_unknown_linux_musl="${TARGET}-g++" \
+    NM_aarch64_unknown_linux_musl="${TARGET}-gcc-nm" \
+    RANLIB_aarch64_unknown_linux_musl="${TARGET}-gcc-ranlib" \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER="${TARGET}-gcc" \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS="${CARGO_TARGET_RUSTFLAGS}"
 
+ARG CARGO_TARGET_RUSTFLAGS
 FROM base AS target_armv7-musleabihf
-ENV TARGET="armv7-unknown-linux-musleabihf" \
-    OPENSSL_ARCH="linux-armv4" \
+ENV TARGET="armv7-unknown-linux-musleabihf"
+ENV OPENSSL_ARCH="linux-armv4" \
     ARCH_CFLAGS="" \
     # Target specific env variables
-    AR_armv7_unknown_linux_musleabihf="armv7-unknown-linux-musleabihf-gcc-ar" \
-    CC_armv7_unknown_linux_musleabihf="armv7-unknown-linux-musleabihf-gcc" \
-    CXX_armv7_unknown_linux_musleabihf="armv7-unknown-linux-musleabihf-g++" \
-    RANLIB_armv7_unknown_linux_musleabihf="armv7-unknown-linux-musleabihf-gcc-ranlib"
+    AR_armv7_unknown_linux_musleabihf="${TARGET}-gcc-ar" \
+    CC_armv7_unknown_linux_musleabihf="${TARGET}-gcc" \
+    CXX_armv7_unknown_linux_musleabihf="${TARGET}-g++" \
+    NM_armv7_unknown_linux_musleabihf="${TARGET}-gcc-nm" \
+    RANLIB_armv7_unknown_linux_musleabihf="${TARGET}-gcc-ranlib" \
+    CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_LINKER="${TARGET}-gcc" \
+    CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_RUSTFLAGS="${CARGO_TARGET_RUSTFLAGS}"
 
+ARG CARGO_TARGET_RUSTFLAGS
 FROM base AS target_arm-musleabi
-ENV TARGET="arm-unknown-linux-musleabi" \
-    OPENSSL_ARCH="linux-armv4" \
+ENV TARGET="arm-unknown-linux-musleabi"
+ENV OPENSSL_ARCH="linux-armv4" \
     ARCH_CFLAGS="" \
     # Target specific env variables
-    AR_arm_unknown_linux_musleabi="arm-unknown-linux-musleabi-gcc-ar" \
-    CC_arm_unknown_linux_musleabi="arm-unknown-linux-musleabi-gcc" \
-    CXX_arm_unknown_linux_musleabi="arm-unknown-linux-musleabi-g++" \
-    RANLIB_arm_unknown_linux_musleabi="arm-unknown-linux-musleabi-gcc-ranlib"
+    AR_arm_unknown_linux_musleabi="${TARGET}-gcc-ar" \
+    CC_arm_unknown_linux_musleabi="${TARGET}-gcc" \
+    CXX_arm_unknown_linux_musleabi="${TARGET}-g++" \
+    NM_arm_unknown_linux_musleabi="${TARGET}-gcc-nm" \
+    RANLIB_arm_unknown_linux_musleabi="${TARGET}-gcc-ranlib" \
+    CARGO_TARGET_ARM_UNKNOWN_LINUX_MUSLEABI_LINKER="${TARGET}-gcc" \
+    CARGO_TARGET_ARM_UNKNOWN_LINUX_MUSLEABI_RUSTFLAGS="${CARGO_TARGET_RUSTFLAGS}"
 
 # Extract the pre-build toolchain from the musl-toolchain image
 # This doesn't need to be build everytime since not much will change
@@ -124,7 +142,6 @@ ENV PATH="${TARGET_PREFIX}/bin:${CARGO_HOME}/bin:${PATH}" \
     TARGET_CPPFLAGS="--sysroot=${SYSROOT} -I${TARGET_PREFIX}/include -I${SYSROOT}/usr/include" \
     SHARED_CFLAGS="-g0 -O2" \
     TARGET_CFLAGS="--sysroot=${SYSROOT} -fdata-sections -ffunction-sections -fno-common -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -fno-delete-null-pointer-checks -fno-strict-aliasing -fno-strict-overflow -fPIE -fstack-clash-protection -fstack-protector-strong -fstrict-flex-arrays=3 -ftrivial-auto-var-init=zero -fzero-call-used-regs=used-gpr -fzero-init-padding-bits=all ${ARCH_CFLAGS}" \
-    RUST_MUSL_CROSS_TARGET="${TARGET}" \
     # pkg-config
     PKG_CONFIG_ALL_STATIC=1 \
     PKG_CONFIG_ALLOW_CROSS=1 \
@@ -987,7 +1004,7 @@ RUN <<EOF
         --no-modify-path \
         --component rustfmt,clippy \
         --default-toolchain "${RUST_CHANNEL}" \
-        --target "${RUST_MUSL_CROSS_TARGET}"
+        --target "${TARGET}"
 
     # Truncate all files within the share folder, since we do not need them, but removing them prevents us from installing or updating toolchains
     find "${RUSTUP_HOME}/toolchains/${RUST_CHANNEL}-$(uname -m)-unknown-linux-gnu/share/" -type f -exec truncate -s0 {} +;
@@ -998,19 +1015,6 @@ RUN <<EOF
       STABLE_VER=$(rustc -V | grep -oE "[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]")
       ln -vfsr "${RUSTUP_HOME}/toolchains/stable-$(uname -m)-unknown-linux-gnu" "${RUSTUP_HOME}/toolchains/${STABLE_VER}-$(uname -m)-unknown-linux-gnu"
     fi
-
-    tee "${CARGO_HOME}/config.toml" <<TOML_EOF
-[build]
-target = "${RUST_MUSL_CROSS_TARGET}"
-rustflags = [
-    "-Ctarget-feature=+crt-static",
-    "-Clink-self-contained=yes",
-    "-Cprefer-dynamic=no"
-]
-
-[target.${RUST_MUSL_CROSS_TARGET}]
-linker = "${TARGET_CC}"
-TOML_EOF
 
     #
     # Link the strip command to musl-strip which is more widely used as the default strip command

@@ -31,3 +31,6 @@ lto = "fat"
 
 [profile.dev]
 strip = "debuginfo"
+
+# [patch.crates-io]
+# mysqlclient-sys = { path = ".artifacts/mysqlclient-sys/" }
