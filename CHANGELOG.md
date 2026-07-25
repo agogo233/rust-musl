@@ -11,6 +11,17 @@ These may occasionally be rebuilt, but only while they're "current", or possibly
 ---
 
 
+## 2026-07-25
+  - Updated SQLite to v3.53.4
+  - Fixed a strange bug found via Vaultwarden using a database backend over TLS/SSL.
+    In the end it was an issue with the compilation of OpenSSL.
+    Apparently if the configure state of OpenSSL finds `-static` inside the `LD_FLAGS` it runs `disable('static', 'pic', 'threads')`.
+    This causes `threading` to be disabled, which in the end causes several weird issue in a sporadic way, and causes tools using it have issues.<br><br>
+    A disclaimer for this specific fix, I used an LLM to troubleshoot this hard to figure-out issue. To be more precise, I used Claude Opus 5 for this.
+    I only used it as a sparring partner, and it never ever edited any file, and I made all the changes my self after verifying.
+    This helped me finding this issue in about 3 hours, while i might very well would have spend 3 days or more to find it because of all the changed parts on both this image, and both Vaultwarden and all the different crates it uses.
+
+
 ## 2026-07-21
   - Remove `config.toml` and use `CARGO_TARGET_` environment variables instead
   - Also add the `NM_<triple>` to point to the correct nm binary

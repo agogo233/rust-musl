@@ -263,9 +263,11 @@ RUN <<EOF
     export LD="${TARGET_LD}"
     export NM="${TARGET_NM}"
     export RANLIB="${TARGET_RANLIB}"
-    export LDFLAGS="${TARGET_LDFLAGS}"
+    # OpenSSL's Configure does `disable('static', 'pic', 'threads')` if it finds a bare `-static` in LDFLAGS.
+    # Pass it via CFLAGS instead, `BIN_CFLAGS` includes $(CFLAGS) and is on the program link line, so static linking is unaffected.
+    export LDFLAGS="${TARGET_LDFLAGS//-static /}"
     export CPPFLAGS="${TARGET_CPPFLAGS}"
-    export CFLAGS="${SHARED_CFLAGS} ${TARGET_CFLAGS}"
+    export CFLAGS="${SHARED_CFLAGS} ${TARGET_CFLAGS} -static"
     export CC="${TARGET_CC}"
 
     # Disable several features, either insecure or not working that well on musl libc or not needed at all
@@ -308,6 +310,9 @@ RUN <<EOF
       --openssldir="${TARGET_PREFIX}/ssl" \
       --libdir="${TARGET_PREFIX}/lib" \
       --prefix="${TARGET_PREFIX}"
+
+    # Fail loudly if OpenSSL is ever build without thread support, this causes very strange issues in other libraries and final rust builds!
+    grep -q 'OPENSSL_THREADS' include/openssl/configuration.h || { echo "FATAL: OpenSSL configured without threads"; exit 1; }
 
     make -j"$(nproc)" depend
     make -j"$(nproc)" build_libs
@@ -757,8 +762,8 @@ EOF
 # Build libsqlite3
 FROM build AS build-sqlite
 SHELL ["/bin/bash", "-eux", "-o", "pipefail", "-c"]
-ARG SQLITE_VER="3.53.3"
-ARG SQLITE_HASH="98f2b3f3c11be6a03ea32346937b032c2472ebbd7a716bed36ca2f5693e7ce8b"
+ARG SQLITE_VER="3.53.4"
+ARG SQLITE_HASH="454e45f61c6bd75b7420e7190732dea03ce6639c63ada47bbc592f67fc340338"
 WORKDIR /tmp/sqlite
 RUN <<EOF
     echo "SQLite3"
@@ -898,10 +903,8 @@ RUN <<EOF
       -DCMAKE_BUILD_TYPE=Release \
       -DWITH_EXTERNAL_ZLIB=ON \
       -DZLIB_USE_STATIC_LIBS=ON \
-      `# -DZLIB_ROOT="${TARGET_PREFIX}"` \
       -DWITH_SSL=OPENSSL \
       -DOPENSSL_USE_STATIC_LIBS=ON \
-      `# -DOPENSSL_ROOT_DIR="${TARGET_PREFIX}"` \
       -DWITH_MYSQLCOMPAT=ON \
       -DWITH_UNIT_TESTS=OFF \
       -DCLIENT_PLUGIN_DIALOG=STATIC \
