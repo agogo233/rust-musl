@@ -12,6 +12,12 @@ These may occasionally be rebuilt, but only while they're "current", or possibly
 
 
 ## 2026-07-25
+  - Updated PostgreSQL to v15.19, v16.15, v17.11 and v18.6
+  - Updated sccache to v0.17.0
+  - Switched zlib download to GitHub
+
+
+## 2026-07-25
   - Updated SQLite to v3.53.4
   - Fixed a strange bug found via Vaultwarden using a database backend over TLS/SSL.
     In the end it was an issue with the compilation of OpenSSL.

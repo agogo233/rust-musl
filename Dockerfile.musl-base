@@ -213,7 +213,7 @@ ARG ZLIB_HASH="d7a0654783a4da529d1bb793b7ad9c3318020af77667bcae35f95d0e42a792f3"
 RUN <<EOF
     echo "zlib"
 
-    ${CURL_CMD} -o "/tmp/zlib-${ZLIB_VER}.tar.xz" "https://zlib.net/zlib-${ZLIB_VER}.tar.xz"
+    ${CURL_CMD} -o "/tmp/zlib-${ZLIB_VER}.tar.xz" "https://github.com/madler/zlib/releases/download/v${ZLIB_VER}/zlib-${ZLIB_VER}.tar.xz"
     echo "${ZLIB_HASH} /tmp/zlib-${ZLIB_VER}.tar.xz" | sha256sum -c -
     tar -xJf "/tmp/zlib-${ZLIB_VER}.tar.xz" -C /tmp
     rm -vf "/tmp/zlib-${ZLIB_VER}.tar.xz"
@@ -391,9 +391,9 @@ RUN <<EOF
 EOF
 
 # Install prebuilt sccache for the correct host platform
-ARG SCCACHE_VER="0.16.0"
-ARG SCCACHE_HASH_x86_64="aec995a83ad3dff3d14b6314e08858b7b73d35ca85a5bcf3d3a9ec07dee35588"
-ARG SCCACHE_HASH_aarch64="f73a5c39f96bb6ebb89cc7915cf182260d4cbf30765322c5e793d0fe8bd80784"
+ARG SCCACHE_VER="0.17.0"
+ARG SCCACHE_HASH_x86_64="67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006"
+ARG SCCACHE_HASH_aarch64="821a86343191aa1cbab74bd42f9e93c9a63bf85e4742945f40d3ae84193c1c77"
 RUN <<EOF
     case "$(uname -m)" in
       x86_64)
@@ -421,8 +421,8 @@ EOF
 # Build libpq v15
 FROM build AS build-pq15
 SHELL ["/bin/bash", "-eux", "-o", "pipefail", "-c"]
-ARG PQ_15_VER="15.18"
-ARG PQ_15_HASH="11df0df97fe3ea4ba9a791faaf39cee1d2fe571e78885b5b55d8517d27c323b4"
+ARG PQ_15_VER="15.19"
+ARG PQ_15_HASH="e1a64a87a46b825b88c082e4518161a47aab53c45694964f8ba1df28f7859f89"
 WORKDIR /tmp/pq15
 RUN <<EOF
     echo "PostgreSQL v15"
@@ -506,8 +506,8 @@ EOF
 # Build libpq v16
 FROM build AS build-pq16
 SHELL ["/bin/bash", "-eux", "-o", "pipefail", "-c"]
-ARG PQ_16_VER="16.14"
-ARG PQ_16_HASH="f6d077142737920858ce958ccdb75c6ee137a63b5b0853c70693d401ac7e3471"
+ARG PQ_16_VER="16.15"
+ARG PQ_16_HASH="c1575341fa7bd40f5274ea465b34390f4dc64cdd0770af327005caaeb9f6b7ed"
 WORKDIR /tmp/pq16
 RUN <<EOF
     echo "PostgreSQL v16"
@@ -591,8 +591,8 @@ EOF
 # Build libpq v17
 FROM build AS build-pq17
 SHELL ["/bin/bash", "-eux", "-o", "pipefail", "-c"]
-ARG PQ_17_VER="17.10"
-ARG PQ_17_HASH="078a03516dcdbdb705fecaf415ea3d13a956c589e46f09fed68a06fb00598c90"
+ARG PQ_17_VER="17.11"
+ARG PQ_17_HASH="dd27f2b3c59e73ed14aa3324901242bf69a032a6347805f274e6260322d42979"
 WORKDIR /tmp/pq17
 RUN <<EOF
     echo "PostgreSQL v17"
@@ -676,8 +676,8 @@ EOF
 # Build libpq v18
 FROM build AS build-pq18
 SHELL ["/bin/bash", "-eux", "-o", "pipefail", "-c"]
-ARG PQ_18_VER="18.4"
-ARG PQ_18_HASH="81a81ec695fb0c7901407defaa1d2f7973617154cf27ba74e3a7ab8e64436094"
+ARG PQ_18_VER="18.6"
+ARG PQ_18_HASH="555610c24d53e4316da5b7d3fc25c279d96856d5e0e23ee308c328c5fa881d9f"
 WORKDIR /tmp/pq18
 RUN <<EOF
     echo "PostgreSQL v18"
