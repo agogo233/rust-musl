@@ -11,6 +11,11 @@ These may occasionally be rebuilt, but only while they're "current", or possibly
 ---
 
 
+## 2026-08-26
+  - Updated OpenSSL to v3.5.8
+  - Updated GHA
+
+
 ## 2026-07-25
   - Updated PostgreSQL to v15.19, v16.15, v17.11 and v18.6
   - Updated sccache to v0.17.0
