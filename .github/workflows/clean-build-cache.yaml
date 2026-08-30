@@ -10,22 +10,28 @@ on:
         type: boolean
         default: true
       older_than:
-        description: "Delete older then n"
+        description: "Delete older then"
         required: true
         default: "30 days"
 
   # schedule:
   #   - cron: "0 1 * * FRI"
+  #     timezone: UTC
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true # Finish running builds to tags and merging will be done correctly
 
 jobs:
   cleanup:
-    runs-on: ubuntu-latest
+    name: Clean ghcr.io buildcache
+    runs-on: ubuntu-24.04
     permissions:
-      packages: write
+      packages: write # Allow cleaning images from ghcr.io
     steps:
       - name: Delete older than (Manual)
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: dataaxiom/ghcr-cleanup-action@cd0cdb900b5dbf3a6f2cc869f0dbb0b8211f50c4 # v1.0.16
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
           package: rust-musl-buildcache
           dry-run: ${{ inputs.dry_run }}
@@ -33,8 +39,24 @@ jobs:
 
       - name: Delete older than 30 days (Scheduled)
         if: ${{ github.event_name == 'schedule' }}
-        uses: dataaxiom/ghcr-cleanup-action@cd0cdb900b5dbf3a6f2cc869f0dbb0b8211f50c4 # v1.0.16
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
           package: rust-musl-buildcache
+          dry-run: false
+          older-than: 30 days
+
+      - name: Delete older than (Manual) - Toolchain
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
+        with:
+          package: musl-toolchain-buildcache
+          dry-run: ${{ inputs.dry_run }}
+          older-than: ${{ inputs.older_than }}
+
+      - name: Delete older than 30 days (Scheduled) - Toolchain
+        if: ${{ github.event_name == 'schedule' }}
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
+        with:
+          package: musl-toolchain-buildcache
           dry-run: false
           older-than: 30 days

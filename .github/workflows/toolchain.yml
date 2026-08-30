@@ -2,54 +2,85 @@ name: Build Toolchains
 permissions: {}
 
 on:
+  push:
+    paths:
+      - ".github/workflows/toolchain.yml"
+      - "Dockerfile.crosstool"
+      - "cross-targets/**"
+    branches:
+      - main
   workflow_dispatch:
 
-## ##
-## To trigger this workflow using `act` (https://github.com/nektos/act) you can do the following.
-## Full run
-##   act push -j toolchain
-## ##
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false # Finish running builds to tags and merging will be done correctly
+
+defaults:
+  run:
+    shell: bash
+
+ ## ##
+ ## To trigger this workflow using `act` (https://github.com/nektos/act) you can do the following.
+ ## Full run, x86_64 only:
+ ##   act push -j toolchain
+ ##
+ ## Run for a specific architecture
+ ##   # amd64
+ ##   act push -j toolchain --matrix os:ubuntu-24.04 --matrix image_tag:x86_64-musl
+ ##
+ ## If you want to use a local registry like `docker.io/registry:3`
+ ##   act push -j toolchain --matrix os:ubuntu-24.04 --matrix image_tag:x86_64-musl --secret LOCAL_REGISTRY=localhost:5000
+ ##
+ ## ##
+
+env:
+  BUILDKIT_PROGRESS: plain
+  DOCKER_BUILD_SUMMARY: ${{ !github.event.act }}
+  DOCKER_BUILD_RECORD_UPLOAD: ${{ !github.event.act }}
 
 jobs:
   # ###
   # Generate variables used by other jobs
   tbuild_vars:
-
     name: Generate Build Variables
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     env:
       HAVE_GHCR_LOGIN: ${{ vars.GHCR_ENABLED == 'true' && github.repository_owner != '' && secrets.GITHUB_TOKEN != '' }}
+      HAVE_LOCAL_REGISTRY:  ${{ secrets.LOCAL_REGISTRY != '' }}
     outputs:
       have_ghcr_login: ${{ env.HAVE_GHCR_LOGIN }}
+      have_local_registry: ${{ env.HAVE_LOCAL_REGISTRY }}
       tag_date: ${{ steps.date.outputs.tag }}
       registry_list: ${{ steps.registry.outputs.list }}
+      cache_ref: ${{ steps.registry.outputs.cache_ref }}
+      cache_opt: ${{ steps.registry.outputs.cache_opt }}
     steps:
       - name: Validate Registry Configuration
-        shell: bash
         run: |
           echo "Configuration check:"
           echo "  GHCR_ENABLED = ${{ vars.GHCR_ENABLED }}"
           echo "  GITHUB_REPOSITORY_OWNER = ${{ github.repository_owner }}"
           echo "  GITHUB_TOKEN exists = ${{ secrets.GITHUB_TOKEN != '' }}"
+          echo "  LOCAL_REGISTRY exists = ${{ secrets.LOCAL_REGISTRY != '' }}"
           echo "  running in act = ${{ github.event.act }}"
 
           if [[ "${{ vars.GHCR_ENABLED }}" != "true" ]]; then
             echo "::warning::GHCR_ENABLED repository variable is not set to 'true'."
             echo "  Please set repository variable GHCR_ENABLED='true' to enable GHCR builds."
           fi
-          if [[ -z "${{ secrets.GITHUB_TOKEN }}" ]]; then
-            echo "::warning::GITHUB_TOKEN secret is not available."
+          if [[ -z "${{ secrets.LOCAL_REGISTRY }}" ]]; then
+            echo "::warning::LOCAL_REGISTRY secret is not available. Local/act builds will have no registry."
           fi
-          if [[ "${{ vars.GHCR_ENABLED }}" != "true" && "${{ github.event.act }}" != "true" ]]; then
-            echo "::error::No registry configuration available for production build."
-            echo "  Either set GHCR_ENABLED='true' with valid GITHUB_TOKEN,"
-            echo "  or run workflow in act mode for local testing."
+          if [[ "${{ vars.GHCR_ENABLED }}" != "true" && "${{ secrets.LOCAL_REGISTRY }}" = "" ]]; then
+            echo "::error::No registry configuration available for the build."
+            echo "  Either set GHCR_ENABLED='true' with a valid GITHUB_TOKEN,"
+            echo "  or set the LOCAL_REGISTRY secret."
             exit 1
           fi
 
       - name: Determine Container Date Tag
         id: date
-        shell: bash
         run: |
           # Get the current date
           echo "tag=$(date +'-%Y-%m-%d')" | tee -a "${GITHUB_OUTPUT}"
@@ -58,92 +89,157 @@ jobs:
         id: registry
         env:
           HAVE_GHCR_LOGIN: ${{ env.HAVE_GHCR_LOGIN }}
-          HAVE_LOCALHOST: ${{ github.event.act }}
-        shell: bash
+          HAVE_LOCAL_REGISTRY: ${{ env.HAVE_LOCAL_REGISTRY }}
+          LOCAL_REGISTRY: ${{ secrets.LOCAL_REGISTRY }}
+          CACHE_REGISTRY: >-
+            ${{ env.HAVE_GHCR_LOGIN == 'true' && 'ghcr.io'
+            || env.HAVE_LOCAL_REGISTRY == 'true' && secrets.LOCAL_REGISTRY
+            || '' }}
         run: |
+          function github_output () {
+            echo "${1}=${2}" | tee -a "${GITHUB_OUTPUT}"
+          }
+
           registries=""
           if [[ "${HAVE_GHCR_LOGIN}" = true ]]; then
             registries="${registries:+${registries} }ghcr.io"
           fi
-          if [[ "${HAVE_LOCALHOST}" = true ]]; then
-            registries="${registries:+${registries} }localhost:5000"
+          if [[ "${HAVE_LOCAL_REGISTRY}" = true ]]; then
+            registries="${registries:+${registries} }${LOCAL_REGISTRY}"
           fi
-          echo "list=${registries}" | tee -a "${GITHUB_OUTPUT}"
+          github_output "list" "${registries}"
+
+          #
+          # Check if we are running this via act or not and determine the caching method
+          if [[ -z "${CACHE_REGISTRY}" ]]; then
+            github_output "cache_ref" ""
+            github_output "cache_opt" ""
+          else
+            github_output "cache_ref" "type=registry,ref=${CACHE_REGISTRY}/blackdex/musl-toolchain-buildcache:ubuntu-base"
+            github_output "cache_opt" "compression=zstd,compression-level=9,force-compression=true,mode=max"
+          fi
+          #
 
   # ###
-  # Building Toolchain
-  toolchain:
-
-    name: Build Toolchain - ${{ matrix.image_tag }} - ${{ matrix.os }}
+  # Building Toolchain base for all targets which is the same
+  tbuild_base:
+    name: Cache Toolchain Base Image - ${{ matrix.os }}
     needs:
       - tbuild_vars
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     permissions:
-      packages: write
+      packages: write # Allow pushing images to ghcr.io
       contents: read
     strategy:
-      max-parallel: ${{ github.event.act && 1 || 8 }}
+      fail-fast: false
       matrix:
-        include:
-          - act: ${{ github.event.act }}
-            os: ubuntu-24.04
-            image_tag: x86_64-musl
-            target: x86_64-unknown-linux-musl
+        os:
+          - ubuntu-24.04
+
     steps:
-      - name: "[act] Debug Matrix"
-        if: ${{ github.event.act }}
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          MATRIX_JSON: ${{ toJson(matrix) }}
-          NEEDS_JSON: ${{ toJson(needs)}}
-          # GITHUB_JSON: ${{ toJson(github) }}
-        run: |
-          echo "event_name = ${EVENT_NAME}"
-          echo ; echo "matrix = ${MATRIX_JSON}"
-          echo ; echo "needs = ${NEEDS_JSON}"
-          # echo ; echo "github = ${GITHUB_JSON}"
-
-      - name: Determine Arch Tag
+      - &arch
+        name: Arch Tag
         id: arch
-        env:
-          MATRIX_OS: ${{ matrix.os }}
-        shell: bash
         run: |
-          if [[ "${MATRIX_OS}" == *-arm ]]; then
-            echo "type=arm64-" | tee -a "${GITHUB_OUTPUT}"
-          else
-            echo "type=amd64-" | tee -a "${GITHUB_OUTPUT}"
-          fi
+          echo "type=amd64" | tee -a "${GITHUB_OUTPUT}"
 
-      - name: Setup Docker Buildx (setup-buildx-action)
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - &buildx
+        name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
         with:
           driver: docker-container
           cache-binary: false
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
+            [worker.oci]
+              max-parallelism = 3
           driver-opts: |
             network=host
 
-      - name: "[act] Start local registry"
-        if: ${{ github.event.act }}
-        shell: bash
-        run: |
-          # Start a local docker registry
-          docker run -d --name act-registry --network host registry:3 || \
-          docker start act-registry || true
-
-      - name: Login to ghcr.io
+      - &ghcr-login
+        name: Login to ghcr.io
         if: ${{ needs.tbuild_vars.outputs.have_ghcr_login == 'true' }}
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate Container Tags
-        continue-on-error: false
+      - &checkout
+        name: Checkout Repo
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Docker Build - Crosstool Base Toolchain
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          platforms: linux/amd64
+          context: .
+          push: false
+          # Only build the Crosstool-NG base/source target for caching
+          target: source
+          file: ./Dockerfile.crosstool
+          cache-from: ${{ needs.tbuild_vars.outputs.cache_ref }}
+          cache-to: ${{ needs.tbuild_vars.outputs.cache_ref != '' && format('{0},{1}', needs.tbuild_vars.outputs.cache_ref, needs.tbuild_vars.outputs.cache_opt) || '' }}
+
+  # ###
+  # Building Toolchain
+  toolchain:
+    name: Build Toolchain - ${{ matrix.image_tag }} - ${{ matrix.os }}
+    needs:
+      - tbuild_vars
+      - tbuild_base
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    permissions:
+      packages: write # Allow pushing images to ghcr.io
+      contents: read
+      attestations: write # Allow generating attestations on the container images
+      id-token: write # Allow generating attestations on the container images
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+        image_tag: &image_tag
+          - x86_64-musl
+        include:
+          - image_tag: x86_64-musl
+            target: x86_64-unknown-linux-musl
+    steps:
+      - &debug-matrix
+        name: "[act] Debug Matrix"
+        if: ${{ github.event.act }}
+        env:
+          BUILD_JSON: ${{ toJson(needs.tbuild_vars) }}
+          NEEDS_JSON: ${{ toJson(needs.toolchain) }}
+          EVENT_NAME: ${{ github.event_name }}
+          MATRIX_JSON: ${{ toJson(matrix) }}
+          # GITHUB_JSON: ${{ toJson(github) }}
+        run: |
+          echo ""
+          echo "# ##################### DEBUGGING #######################"
+          echo ""
+          echo "event_name = ${EVENT_NAME}"
+          echo "build_json = ${BUILD_JSON}"
+          echo "needs_json = ${NEEDS_JSON}"
+          echo ; echo "matrix = ${MATRIX_JSON}"
+          # echo ; echo "github = ${GITHUB_JSON}"
+          echo ""
+          echo "# #######################################################"
+          echo ""
+
+      - *arch
+
+      - *buildx
+
+      - *ghcr-login
+
+      - name: Generate Arch Container Tags
         id: tags
-        shell: bash
         env:
           REGISTRIES: ${{ needs.tbuild_vars.outputs.registry_list }}
           ARCH_TYPE: ${{ steps.arch.outputs.type }}
@@ -163,8 +259,8 @@ jobs:
           tags=""
           for registry in ${REGISTRIES}; do
             echo "  Processing registry: ${registry}"
-            tag1="${registry}/blackdex/musl-toolchain:${ARCH_TYPE}${IMAGE_TAG}"
-            tag2="${registry}/blackdex/musl-toolchain:${ARCH_TYPE}${IMAGE_TAG}${TAG_DATE}"
+            tag1="${registry}/blackdex/musl-toolchain:${ARCH_TYPE}-${IMAGE_TAG}"
+            tag2="${registry}/blackdex/musl-toolchain:${ARCH_TYPE}-${IMAGE_TAG}${TAG_DATE}"
             echo "    - ${tag1}"
             echo "    - ${tag2}"
             tags="${tags:+${tags},}${tag1}"
@@ -182,96 +278,71 @@ jobs:
             echo "To fix:"
             echo "  1. Set repository variable GHCR_ENABLED='true'"
             echo "  2. Ensure GITHUB_TOKEN secret exists (automatic for GitHub Actions)"
-            echo "  3. Or run workflow using 'act' to use localhost:5000"
+            echo "  3. Or set the LOCAL_REGISTRY secret for local/act builds"
             exit 1
           fi
 
           echo "Generated tags: ${tags}"
           echo "tags=${tags}" | tee -a "${GITHUB_OUTPUT}"
 
-      - name: Checkout Repo
-        uses: actions/checkout@71cf2267d89c5cb81562390fa70a37fa40b1305e # v6-beta
-        with:
-          persist-credentials: false
+      - *checkout
 
       - name: Docker Build
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        env:
-          BUILDKIT_PROGRESS: plain
+        id: build_push
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           platforms: linux/amd64
-          outputs: type=image,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true,push=true
+          outputs: type=image,oci-mediatypes=true,compression=zstd,compression-level=3
           context: .
-          file: ./Dockerfile.toolchain
+          # Push the image to the available container registries
+          push: true
+          file: ./Dockerfile.crosstool
           build-args: |
             TARGET=${{ matrix.target }}
           tags: ${{ steps.tags.outputs.tags }}
+          cache-from: ${{ needs.tbuild_vars.outputs.cache_ref }}
 
-  # Merge the separate build amd64 and arm64 builds into one
+          # We do not use `cache-to` here, since these toolchains are not build that often, and caching makes no sense
+
+      - name: Attest - Toolchain - ghcr.io
+        if: ${{ !github.event.act && steps.build_push.outputs.digest != '' && needs.tbuild_vars.outputs.have_ghcr_login == 'true' }}
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-name: ghcr.io/blackdex/musl-toolchain
+          subject-digest: ${{ steps.build_push.outputs.digest }}
+          push-to-registry: true
+
+  # Merge the per-tag builds into one combined manifest
+
   # https://docs.docker.com/build/ci/github-actions/multi-platform/#distribute-build-across-multiple-runners
   toolchain_merge:
-
     name: Merge Toolchain Container
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
-      packages: write
+      packages: write # Allow pushing images to ghcr.io
+      attestations: write # Allow generating attestations on the container images
+      id-token: write # Allow generating attestations on the container images
     needs:
       - tbuild_vars
       - toolchain
     strategy:
-      max-parallel: ${{ github.event.act && 1 || 8 }}
+      fail-fast: false
       matrix:
-        image_tag:
-          - x86_64-musl
+        image_tag: *image_tag
     steps:
-      - name: "[act] Debug Matrix"
-        if: ${{ github.event.act }}
-        shell: bash
-        env:
-          BUILD_JSON: ${{ toJson(needs.tbuild_vars) }}
-          NEEDS_JSON: ${{ toJson(needs.toolchain) }}
-          EVENT_NAME: ${{ github.event_name }}
-          MATRIX_JSON: ${{ toJson(matrix) }}
-          # GITHUB_JSON: ${{ toJson(github) }}
-        run: |
-          echo "event_name = ${EVENT_NAME}"
-          echo "build_json = ${BUILD_JSON}"
-          echo "needs_json = ${NEEDS_JSON}"
-          echo ; echo "matrix = ${MATRIX_JSON}"
-          # echo ; echo "github = ${GITHUB_JSON}"
+      - *debug-matrix
 
-      - name: Setup Docker Buildx (setup-buildx-action)
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
-        with:
-          driver: docker-container
-          cache-binary: false
-          driver-opts: |
-            network=host
+      - *buildx
 
-      - name: "[act] Start local registry"
-        if: ${{ github.event.act }}
-        shell: bash
-        run: |
-          # Start a local docker registry
-          docker run -d --name act-registry --network host registry:3 || \
-          docker start act-registry || true
+      - *ghcr-login
 
-      - name: Login to ghcr.io
-        if: ${{ needs.tbuild_vars.outputs.have_ghcr_login == 'true' }}
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create combined manifests for amd64/arm64
-        shell: bash
+      - name: Create combined manifests for amd64
         env:
           REGISTRIES: ${{ needs.tbuild_vars.outputs.registry_list }}
           TAG_DATE: ${{ needs.tbuild_vars.outputs.tag_date }}
           IMAGE_TAG: ${{ matrix.image_tag }}
         run: |
-          tags=""
           for registry in ${REGISTRIES}; do
             echo "Generating manifest for ${registry}:"
             docker buildx imagetools create \
@@ -280,14 +351,27 @@ jobs:
               ${registry}/blackdex/musl-toolchain:amd64-${IMAGE_TAG}${TAG_DATE}
           done
 
-      - name: Inspect manifests for amd64/arm64
-        shell: bash
+      - name: Inspect manifests for amd64
+        id: merged_toolchain
         env:
           REGISTRIES: ${{ needs.tbuild_vars.outputs.registry_list }}
           IMAGE_TAG: ${{ matrix.image_tag }}
         run: |
-          tags=""
           for registry in ${REGISTRIES}; do
             echo "Inspecting manifest for ${registry}:"
             docker buildx imagetools inspect ${registry}/blackdex/musl-toolchain:${IMAGE_TAG}
+
+            # Extract the merged digest to run attest on this too
+            if [[ "${registry}" = "ghcr.io" ]]; then
+              merged_digest=$(docker buildx imagetools inspect --format "{{json .Manifest.Digest}}" ghcr.io/blackdex/musl-toolchain:${IMAGE_TAG})
+              echo "digest=${merged_digest//\"/}" | tee -a "${GITHUB_OUTPUT}"
+            fi
           done
+
+      - name: Attest - Merged Stable - ghcr.io
+        if: ${{ !github.event.act && steps.merged_toolchain.outputs.digest != '' && needs.tbuild_vars.outputs.have_ghcr_login == 'true' }}
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-name: ghcr.io/blackdex/musl-toolchain
+          subject-digest: ${{ steps.merged_toolchain.outputs.digest }}
+          push-to-registry: true
