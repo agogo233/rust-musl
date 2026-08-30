@@ -885,6 +885,7 @@ jobs:
 
       - name: Inspect combined manifests - Stable
         id: comb_stable
+        if: ${{ needs.mbuild_vars.outputs.stable_trigger || !needs.mbuild_vars.outputs.nightly_trigger }}
         env:
           REGISTRIES: ${{ needs.mbuild_vars.outputs.registry_list }}
           STABLE_VERSION: ${{ needs.mbuild_vars.outputs.stable_version }}
@@ -939,6 +940,7 @@ jobs:
 
       - name: Inspect combined manifests - Vaultwarden Stable
         id: comb_vw
+        if: ${{ needs.mbuild_vars.outputs.stable_version != needs.mbuild_vars.outputs.vaultwarden_version && (needs.mbuild_vars.outputs.stable_trigger || !needs.mbuild_vars.outputs.nightly_trigger) }}
         env:
           REGISTRIES: ${{ needs.mbuild_vars.outputs.registry_list }}
           VW_VERSION: ${{ needs.mbuild_vars.outputs.vaultwarden_version }}
